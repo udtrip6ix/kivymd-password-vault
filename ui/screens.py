@@ -1,8 +1,11 @@
 from kivy.app import App
-from kivy.properties import BooleanProperty, ListProperty, NumericProperty, StringProperty
+from kivy.properties import BooleanProperty, NumericProperty, StringProperty
+from kivymd.toast import toast
+from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDFlatButton, MDRaisedButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.screen import MDScreen
+from kivymd.uix.textfield import MDTextField
 
 from core.crypto import CryptoError
 from core.database import DatabaseError, VaultEntry
@@ -16,7 +19,8 @@ class AuthScreen(MDScreen):
 
     def on_pre_enter(self, *args) -> None:
         app = App.get_running_app()
-        self.is_setup_mode = not app.db.is_initialized()
+        main_db = app.main_db or app.db
+        self.is_setup_mode = not main_db.is_initialized()
         self.status_text = ""
         if "password_field" in self.ids:
             self.ids.password_field.text = ""
@@ -40,13 +44,15 @@ class AuthScreen(MDScreen):
                 self.status_text = "Пароли не совпадают."
                 return
             try:
-                key = app.db.initialize_vault(password)
+                target_db = app.main_db or app.db
+                key = target_db.initialize_vault(password)
+                is_decoy = False
             except (DatabaseError, CryptoError) as exc:
                 self.status_text = str(exc)
                 return
         else:
             try:
-                key = app.db.unlock(password)
+                target_db, key, is_decoy = app.authenticate_vault(password)
             except (DatabaseError, CryptoError) as exc:
                 self.status_text = str(exc)
                 return
@@ -55,7 +61,7 @@ class AuthScreen(MDScreen):
         if "confirm_field" in self.ids:
             self.ids.confirm_field.text = ""
         self.status_text = ""
-        app.open_session(key)
+        app.open_session(target_db, key, is_decoy)
 
 
 class VaultScreen(MDScreen):
@@ -63,12 +69,81 @@ class VaultScreen(MDScreen):
     entries_count = NumericProperty(0)
     empty_text = StringProperty("Записей пока нет. Нажмите + чтобы добавить.")
     _all_entries: list[VaultEntry] = []
+    _decoy_dialog: MDDialog | None = None
+    _main_pwd_input: MDTextField | None = None
+    _decoy_pwd_input: MDTextField | None = None
 
     def on_pre_enter(self, *args) -> None:
         self.refresh_entries()
 
     def lock_now(self) -> None:
         App.get_running_app().lock_vault()
+
+    def open_decoy_setup(self) -> None:
+        app = App.get_running_app()
+        if app.is_decoy_mode:
+            return
+
+        if self._decoy_dialog is None:
+            content = MDBoxLayout(
+                orientation="vertical",
+                spacing="12dp",
+                size_hint_y=None,
+                height="130dp",
+            )
+            self._main_pwd_input = MDTextField(
+                hint_text="Текущий основной мастер-пароль",
+                password=True,
+                mode="rectangle",
+            )
+            self._decoy_pwd_input = MDTextField(
+                hint_text="Пароль decoy-хранилища (мин. 8 симв.)",
+                password=True,
+                mode="rectangle",
+            )
+            content.add_widget(self._main_pwd_input)
+            content.add_widget(self._decoy_pwd_input)
+
+            self._decoy_dialog = MDDialog(
+                title="Резервное (decoy) хранилище",
+                type="custom",
+                content_cls=content,
+                buttons=[
+                    MDFlatButton(
+                        text="ОТМЕНА",
+                        on_release=lambda _btn: self._decoy_dialog.dismiss(),
+                    ),
+                    MDRaisedButton(
+                        text="СОХРАНИТЬ",
+                        on_release=lambda _btn: self._save_decoy_setup(),
+                    ),
+                ],
+            )
+
+        if self._main_pwd_input is not None:
+            self._main_pwd_input.text = ""
+        if self._decoy_pwd_input is not None:
+            self._decoy_pwd_input.text = ""
+        self._decoy_dialog.open()
+
+    def _save_decoy_setup(self) -> None:
+        app = App.get_running_app()
+        main_pwd = (self._main_pwd_input.text if self._main_pwd_input else "").strip()
+        decoy_pwd = (self._decoy_pwd_input.text if self._decoy_pwd_input else "").strip()
+
+        if len(decoy_pwd) < 8:
+            toast("Пароль decoy-хранилища должен быть не короче 8 символов")
+            return
+
+        try:
+            app.configure_decoy_vault(decoy_pwd, main_pwd)
+        except (DatabaseError, CryptoError) as exc:
+            toast(str(exc))
+            return
+
+        if self._decoy_dialog:
+            self._decoy_dialog.dismiss()
+        toast("Decoy-хранилище настроено")
 
     def refresh_entries(self) -> None:
         app = App.get_running_app()

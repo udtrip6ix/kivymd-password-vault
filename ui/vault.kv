@@ -85,7 +85,7 @@
 
             MDTopAppBar:
                 title: "PassVault"
-                right_action_items: [["lock", lambda x: root.lock_now()]]
+                right_action_items: ([["shield-key-outline", lambda x: root.open_decoy_setup()], ["lock", lambda x: root.lock_now()]] if not app.is_decoy_mode else [["lock", lambda x: root.lock_now()]])
 
             MDBoxLayout:
                 orientation: "vertical"
