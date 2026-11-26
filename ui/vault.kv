@@ -1,0 +1,96 @@
+#:import dp kivy.metrics.dp
+#:import sp kivy.metrics.sp
+
+<AuthScreen>:
+    name: "auth"
+    MDBoxLayout:
+        orientation: "vertical"
+        padding: [dp(16 * app.ui_scale), dp(20 * app.ui_scale)]
+        spacing: dp(14 * app.ui_scale)
+
+        Widget:
+
+        MDCard:
+            orientation: "vertical"
+            padding: dp(20 * app.ui_scale)
+            spacing: dp(14 * app.ui_scale)
+            size_hint_x: None
+            width: min(root.width - dp(32 * app.ui_scale), dp(460))
+            pos_hint: {"center_x": 0.5}
+            size_hint_y: None
+            height: self.minimum_height
+            radius: [dp(16 * app.ui_scale)]
+            elevation: 2
+
+            MDLabel:
+                text: "Создание хранилища" if root.is_setup_mode else "Вход в PassVault"
+                font_style: "H5"
+                font_size: sp(22 * app.ui_scale)
+                halign: "center"
+                adaptive_height: True
+
+            MDLabel:
+                text: "Задайте надёжный мастер-пароль. Восстановить его невозможно." if root.is_setup_mode else "Введите мастер-пароль для расшифровки базы."
+                theme_text_color: "Secondary"
+                font_style: "Caption"
+                font_size: sp(12 * app.ui_scale)
+                halign: "center"
+                adaptive_height: True
+
+            MDTextField:
+                id: password_field
+                hint_text: "Мастер-пароль"
+                password: True
+                mode: "rectangle"
+                font_size: sp(15 * app.ui_scale)
+                on_text_validate: root.submit_auth()
+
+            MDTextField:
+                id: confirm_field
+                hint_text: "Повторите мастер-пароль"
+                password: True
+                mode: "rectangle"
+                font_size: sp(15 * app.ui_scale)
+                opacity: 1 if root.is_setup_mode else 0
+                disabled: not root.is_setup_mode
+                size_hint_y: None
+                height: dp(56 * app.ui_scale) if root.is_setup_mode else 0
+                on_text_validate: root.submit_auth()
+
+            MDLabel:
+                text: root.status_text
+                theme_text_color: "Error"
+                font_style: "Caption"
+                font_size: sp(12 * app.ui_scale)
+                halign: "center"
+                adaptive_height: True
+
+            MDRaisedButton:
+                text: "Создать хранилище" if root.is_setup_mode else "Разблокировать"
+                font_size: sp(15 * app.ui_scale)
+                pos_hint: {"center_x": 0.5}
+                size_hint_x: 1
+                size_hint_y: None
+                height: dp(46 * app.ui_scale)
+                on_release: root.submit_auth()
+
+        Widget:
+
+<VaultScreen>:
+    name: "vault"
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "PassVault"
+            right_action_items: [["lock", lambda x: root.lock_now()]]
+
+        MDBoxLayout:
+            orientation: "vertical"
+            padding: dp(20 * app.ui_scale)
+
+            MDLabel:
+                text: "Хранилище разблокировано."
+                font_size: sp(14 * app.ui_scale)
+                halign: "center"
+                theme_text_color: "Secondary"
